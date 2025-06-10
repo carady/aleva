@@ -12,6 +12,7 @@ dependencies = [
     "openwakeword (>=0.6.0,<0.7.0)",
     "pyaudio (>=0.2.14,<0.3.0)",
     "PySide6>=6.5.0",
+    "pywin32 (>=310,<311) ; sys_platform == \"windows\"",
     "sounddevice>=0.4.6",
     "vosk (>=0.3.45,<0.4.0)"
 ]

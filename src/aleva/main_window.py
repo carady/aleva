@@ -5,6 +5,7 @@ import threading
 import time
 from pathlib import Path
 from typing import Optional
+from platform import system
 
 import numpy as np
 import sounddevice as sd
@@ -29,6 +30,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+if system() == 'Windows':
+    import win32api
+    import win32gui
+    import win32con
 
 WAKE_WORD_FILE = 'alexa_v0.1.onnx'
 
@@ -252,6 +257,7 @@ class MainWindow(QMainWindow):
                 wakeword_models=[str(model_file)],
                 # inference_framework="tflite",
                 inference_framework="onnx",
+                vad_threshold=0.2,
             )
             print("Wake word model initialized successfully")
             
@@ -502,6 +508,7 @@ class MainWindow(QMainWindow):
                         # Check for wake word detection (adjust threshold as needed)
                         for wake_word, score in prediction.items():
                             if score > 0.5:  # Threshold for detection
+                                print('device_id', device_id)
                                 print(f"Wake word '{wake_word}' detected with score: {score}")
                                 self.wake_word_detected()
                                 break
@@ -648,6 +655,7 @@ class MainWindow(QMainWindow):
             # Get list of audio devices
             devices = sd.query_devices()
             microphones = []
+            device_names = set()
 
             # Virtual device keywords to filter out
             virtual_keywords = [
@@ -675,6 +683,9 @@ class MainWindow(QMainWindow):
                 # Check if device has input channels (microphone)
                 if device["max_input_channels"] > 0:
                     device_name = device["name"].lower()
+                    if device_name in device_names:
+                        continue
+                    device_names.add(device_name)
 
                     # Skip virtual devices by checking for virtual keywords
                     is_virtual = any(keyword in device_name for keyword in virtual_keywords)
