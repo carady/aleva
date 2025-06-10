@@ -35,48 +35,50 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-if system() == 'Windows':
+
+if system() == "Windows":
     import win32api
     import win32gui
     import win32con
 
-WAKE_WORD_FILE = 'alexa_v0.1.onnx'
+WAKE_WORD_FILE = "alexa_v0.1.onnx"
 VOSK_MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-en-us-0.22.zip"
 VOSK_MODEL_NAME = "vosk-model-en-us-0.22"
 
 
 class DownloadThread(QThread):
     """Thread for downloading files without blocking the UI"""
-    
+
     progress_updated = Signal(int)
     download_finished = Signal(str)
     download_error = Signal(str)
-    
+
     def __init__(self, url: str, target_path: Path, parent=None):
         super().__init__(parent)
         self.url = url
         self.target_path = target_path
         self.target_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     def run(self):
         """Download file in background thread"""
         try:
+
             def progress_hook(block_num, block_size, total_size):
                 if total_size > 0:
                     downloaded = block_num * block_size
                     percentage = min(int(downloaded * 100 / total_size), 100)
                     self.progress_updated.emit(percentage)
-            
+
             urllib.request.urlretrieve(self.url, self.target_path, progress_hook)
             self.download_finished.emit(str(self.target_path))
-            
+
         except Exception as e:
             self.download_error.emit(str(e))
 
 
 class ModelDownloadDialog(QProgressDialog):
     """Dialog for downloading and extracting models"""
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Download Model"))
@@ -85,55 +87,55 @@ class ModelDownloadDialog(QProgressDialog):
         self.setModal(True)
         self.setAutoClose(False)
         self.setAutoReset(False)
-        
+
         # Thread for downloading
         self.download_thread = None
         self.models_dir = None
         self.target_file = None
-        
+
     def start_download(self, models_dir: Path):
         """Start the download process"""
         self.models_dir = models_dir
         self.target_file = models_dir / "vosk-model-en-us-0.22.zip"
-        
+
         # Create download thread
         self.download_thread = DownloadThread(VOSK_MODEL_URL, self.target_file, self)
         self.download_thread.progress_updated.connect(self.setValue)
         self.download_thread.download_finished.connect(self.on_download_finished)
         self.download_thread.download_error.connect(self.on_download_error)
-        
+
         # Start download
         self.download_thread.start()
         self.show()
-    
+
     def on_download_finished(self, file_path: str):
         """Handle successful download completion"""
         self.setLabelText(self.tr("Extracting model..."))
         self.setValue(100)
-        
+
         try:
             # Extract the zip file
-            with zipfile.ZipFile(file_path, 'r') as zip_ref:
+            with zipfile.ZipFile(file_path, "r") as zip_ref:
                 zip_ref.extractall(self.models_dir)
-            
+
             # Clean up zip file
             os.remove(file_path)
-            
+
             self.setLabelText(self.tr("Model downloaded successfully!"))
-            QMessageBox.information(self, self.tr("Success"), 
-                                  self.tr("Vosk model downloaded and extracted successfully!"))
+            QMessageBox.information(
+                self, self.tr("Success"), self.tr("Vosk model downloaded and extracted successfully!")
+            )
             self.accept()
-            
+
         except Exception as e:
             self.on_download_error(f"Failed to extract: {e}")
-    
+
     def on_download_error(self, error_message: str):
         """Handle download error"""
         self.hide()
-        QMessageBox.critical(self, self.tr("Download Error"), 
-                           self.tr(f"Failed to download model: {error_message}"))
+        QMessageBox.critical(self, self.tr("Download Error"), self.tr(f"Failed to download model: {error_message}"))
         self.reject()
-    
+
     def closeEvent(self, event):
         """Handle dialog close event"""
         if self.download_thread and self.download_thread.isRunning():
@@ -199,15 +201,15 @@ class MainWindow(QMainWindow):
         self.language_codes = {"English": "en", "中文": "zh", "日本語": "ja"}
 
         self.current_language = "en"
-        
+
         # Configuration
         self.config_dir = Path(QStandardPaths.writableLocation(QStandardPaths.AppDataLocation))
         self.config_file = self.config_dir / "config.json"
         self.config = {}
-        
+
         # Initialize configuration
         self.init_config()
-        
+
         # Audio processing variables
         self.is_listening = False
         self.audio_thread: Optional[threading.Thread] = None
@@ -216,13 +218,13 @@ class MainWindow(QMainWindow):
         self.vosk_recognizer: Optional[KaldiRecognizer] = None
         self.sample_rate = 16000
         self.chunk_size = 1024
-        
+
         # Initialize wake word model
         self.init_wake_word_model()
 
         # Setup UI
         self.setup_ui()
-        
+
         # Check model status
         has_vosk_model = self.check_and_update_model_status()
         if has_vosk_model:
@@ -303,7 +305,7 @@ class MainWindow(QMainWindow):
         self.listen_button.clicked.connect(self.toggle_listening)
         self.status_label = QLabel(self.tr("Ready"))
         self.status_label.setStyleSheet("color: gray; font-style: italic;")
-        
+
         listen_layout.addWidget(self.listen_button)
         listen_layout.addWidget(self.status_label)
         listen_layout.addStretch()
@@ -367,40 +369,50 @@ class MainWindow(QMainWindow):
             else:
                 self.api_url.setText(self.tr("Not set"))
                 self.api_url.setStyleSheet("color: gray; font-style: italic;")
-            
+
             # Save configuration after API URL change
             self.save_config()
 
     def show_model_download_dialog(self) -> None:
         """Show model download dialog"""
         models_dir = self.config_dir / "models"
-        
+
         # Check if model already exists
         vosk_model_dir = models_dir / VOSK_MODEL_NAME
         if vosk_model_dir.exists():
             reply = QMessageBox.question(
-                self, 
-                self.tr("Model Exists"), 
+                self,
+                self.tr("Model Exists"),
                 self.tr("Vosk model already exists. Do you want to redownload it?"),
                 QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
+                QMessageBox.No,
             )
             if reply != QMessageBox.Yes:
                 return
-        
+
         # Start download
         dialog = ModelDownloadDialog(self)
         dialog.start_download(models_dir)
-        
+
         # Update model status after successful download
         if dialog.exec() == QProgressDialog.Accepted:
-            self.check_and_update_model_status()
+            has_model = self.check_and_update_model_status()
+            if has_model:
+                try:
+                    # Initialize Vosk model and recognizer
+                    self.vosk_model = VoskModel(str(models_dir / VOSK_MODEL_NAME))
+                    self.vosk_recognizer = KaldiRecognizer(self.vosk_model, self.sample_rate)
+                    print("Vosk model and recognizer initialized successfully")
+                except Exception as e:
+                    print(f"Error initializing Vosk model: {e}")
+                    self.vosk_model = None
+                    self.vosk_recognizer = None
 
     def check_and_update_model_status(self) -> bool:
         """Check if Vosk model exists and update UI accordingly"""
         models_dir = self.config_dir / "models"
         vosk_model_dir = models_dir / VOSK_MODEL_NAME
-        
+
         if vosk_model_dir.exists() and vosk_model_dir.is_dir():
             self.vosk_model_label.setText(VOSK_MODEL_NAME)
             self.vosk_model_label.setStyleSheet("color: green; font-weight: bold;")
@@ -427,11 +439,11 @@ class MainWindow(QMainWindow):
                 vad_threshold=0.2,
             )
             print("Wake word model initialized successfully")
-            
+
             # Note: For a custom "aleva" wake word, you would need to train a custom model
             # For now, we'll use the general model and implement simple text matching
             print("Using general wake word detection model")
-            
+
         except Exception as e:
             print(f"Failed to initialize wake word model: {e}")
             self.oww_model = None
@@ -442,7 +454,7 @@ class MainWindow(QMainWindow):
             # Create config directory if it doesn't exist
             self.config_dir.mkdir(parents=True, exist_ok=True)
             print(f"Config directory: {self.config_dir}")
-            
+
             if self.config_file.exists():
                 # Load existing config
                 self.load_config()
@@ -451,7 +463,7 @@ class MainWindow(QMainWindow):
                 # Create default config
                 self.create_default_config()
                 print(f"Created default config at: {self.config_file}")
-                
+
         except Exception as e:
             print(f"Error initializing config: {e}")
             # Fallback to default config in memory
@@ -461,31 +473,16 @@ class MainWindow(QMainWindow):
         """Get default configuration"""
         return {
             "version": "0.1.0",
-            "ui": {
-                "language": "en",
-                "window_geometry": {
-                    "x": 200,
-                    "y": 200,
-                    "width": 400,
-                    "height": 300
-                }
-            },
+            "ui": {"language": "en", "window_geometry": {"x": 200, "y": 200, "width": 400, "height": 300}},
             "audio": {
                 "sample_rate": 16000,
                 "chunk_size": 1024,
                 "selected_microphone": None,
-                "wake_word_threshold": 0.5
+                "wake_word_threshold": 0.5,
             },
-            "api": {
-                "url": None
-            },
-            "models": {
-                "vosk_model_path": None
-            },
-            "system": {
-                "minimize_to_tray": True,
-                "show_tray_notifications": True
-            }
+            "api": {"url": None},
+            "models": {"vosk_model_path": None},
+            "system": {"minimize_to_tray": True, "show_tray_notifications": True},
         }
 
     def create_default_config(self) -> None:
@@ -499,16 +496,16 @@ class MainWindow(QMainWindow):
     def load_config(self) -> None:
         """Load configuration from file"""
         try:
-            with open(self.config_file, 'r', encoding='utf-8') as f:
+            with open(self.config_file, "r", encoding="utf-8") as f:
                 loaded_config = json.load(f)
-            
+
             # Merge with default config to ensure all keys exist
             default_config = self.get_default_config()
             self.config = self.merge_configs(default_config, loaded_config)
-            
+
             # Apply loaded configuration
             self.apply_config()
-            
+
         except Exception as e:
             print(f"Error loading config: {e}")
             self.config = self.get_default_config()
@@ -518,24 +515,24 @@ class MainWindow(QMainWindow):
         try:
             # Update config with current settings before saving
             self.update_config_from_ui()
-            
-            with open(self.config_file, 'w', encoding='utf-8') as f:
+
+            with open(self.config_file, "w", encoding="utf-8") as f:
                 json.dump(self.config, f, indent=4, ensure_ascii=False)
             print("Configuration saved successfully")
-            
+
         except Exception as e:
             print(f"Error saving config: {e}")
 
     def merge_configs(self, default: dict, loaded: dict) -> dict:
         """Recursively merge loaded config with default config"""
         result = default.copy()
-        
+
         for key, value in loaded.items():
             if key in result and isinstance(result[key], dict) and isinstance(value, dict):
                 result[key] = self.merge_configs(result[key], value)
             else:
                 result[key] = value
-                
+
         return result
 
     def apply_config(self) -> None:
@@ -545,35 +542,30 @@ class MainWindow(QMainWindow):
             language = self.config.get("ui", {}).get("language", "en")
             if language != self.current_language:
                 self.load_language(language)
-                
+
                 # Update language combo box
                 language_map = {"en": "English", "zh": "中文", "ja": "日本語"}
                 if language in language_map:
                     index = self.language_combo.findText(language_map[language])
                     if index >= 0:
                         self.language_combo.setCurrentIndex(index)
-            
+
             # Apply window geometry
             geometry = self.config.get("ui", {}).get("window_geometry", {})
             if all(key in geometry for key in ["x", "y", "width", "height"]):
-                self.setGeometry(
-                    geometry["x"], 
-                    geometry["y"], 
-                    geometry["width"], 
-                    geometry["height"]
-                )
-            
+                self.setGeometry(geometry["x"], geometry["y"], geometry["width"], geometry["height"])
+
             # Apply audio settings
             audio_config = self.config.get("audio", {})
             self.sample_rate = audio_config.get("sample_rate", 16000)
             self.chunk_size = audio_config.get("chunk_size", 1024)
-            
+
             # Apply API URL
             api_url = self.config.get("api", {}).get("url")
             if api_url:
                 self.api_url.setText(api_url)
                 self.api_url.setStyleSheet("color: black; font-style: normal;")
-            
+
         except Exception as e:
             print(f"Error applying config: {e}")
 
@@ -582,29 +574,29 @@ class MainWindow(QMainWindow):
         try:
             # Update language
             self.config["ui"]["language"] = self.current_language
-            
+
             # Update window geometry
             geometry = self.geometry()
             self.config["ui"]["window_geometry"] = {
                 "x": geometry.x(),
                 "y": geometry.y(),
                 "width": geometry.width(),
-                "height": geometry.height()
+                "height": geometry.height(),
             }
-            
+
             # Update API URL
             api_url = self.api_url.text()
             if api_url and api_url != self.tr("Not set"):
                 self.config["api"]["url"] = api_url
             else:
                 self.config["api"]["url"] = None
-            
+
             # Update selected microphone
             if self.microphone_combo.count() > 0:
                 selected_mic = self.microphone_combo.currentText()
                 if selected_mic != self.tr("No microphones found"):
                     self.config["audio"]["selected_microphone"] = selected_mic
-                    
+
         except Exception as e:
             print(f"Error updating config from UI: {e}")
 
@@ -629,11 +621,17 @@ class MainWindow(QMainWindow):
             self.listen_button.setChecked(False)
             return
 
+        if self.vosk_model is None:
+            self.status_label.setText(self.tr("Speech model not available"))
+            self.status_label.setStyleSheet("color: red;")
+            self.listen_button.setChecked(False)
+            return
+
         self.is_listening = True
         self.listen_button.setText(self.tr("Stop"))
         self.status_label.setText(self.tr("Listening..."))
         self.status_label.setStyleSheet("color: green;")
-        
+
         # Get selected microphone device index
         mic_text = self.microphone_combo.currentText()
         device_id = None
@@ -652,7 +650,7 @@ class MainWindow(QMainWindow):
         self.is_listening = False
         if self.audio_thread and self.audio_thread.is_alive():
             self.audio_thread.join(timeout=1.0)
-        
+
         self.listen_button.setText(self.tr("Listen"))
         self.status_label.setText(self.tr("Ready"))
         self.status_label.setStyleSheet("color: gray; font-style: italic;")
@@ -664,26 +662,52 @@ class MainWindow(QMainWindow):
             def audio_callback(indata, frames, time, status):
                 if status:
                     print(f"Audio callback status: {status}")
-                
-                # Convert to the format expected by OpenWakeWord
+
+                # Convert to the format expected by OpenWakeWord and Vosk
                 audio_data = indata[:, 0] if len(indata.shape) > 1 else indata
-                audio_data = (audio_data * 32767).astype(np.int16)
-                
+                audio_data_int16 = (audio_data * 32767).astype(np.int16)
+
                 # Process with wake word detection
                 if self.oww_model is not None:
                     try:
                         # Get prediction scores
-                        prediction = self.oww_model.predict(audio_data)
-                        
+                        prediction = self.oww_model.predict(audio_data_int16)
+
                         # Check for wake word detection (adjust threshold as needed)
                         for wake_word, score in prediction.items():
                             if score > 0.5:  # Threshold for detection
-                                print('device_id', device_id)
+                                print("device_id", device_id)
                                 print(f"Wake word '{wake_word}' detected with score: {score}")
                                 self.wake_word_detected()
                                 break
                     except Exception as e:
                         print(f"Error in wake word detection: {e}")
+
+                # Process with Vosk speech recognition
+                if self.vosk_recognizer is not None:
+                    try:
+                        # Convert audio data to bytes for Vosk
+                        audio_bytes = audio_data_int16.tobytes()
+
+                        # Feed audio to Vosk recognizer
+                        if self.vosk_recognizer.AcceptWaveform(audio_bytes):
+                            # End of utterance detected (silence after speech)
+                            result = self.vosk_recognizer.Result()
+                            result_dict = json.loads(result)
+                            text = result_dict.get("text", "").strip()
+
+                            if text:
+                                print(f"Recognized speech: {text}")
+
+                        # Optionally, you can also get partial results during speech
+                        # partial_result = self.vosk_recognizer.PartialResult()
+                        # partial_dict = json.loads(partial_result)
+                        # partial_text = partial_dict.get('partial', '').strip()
+                        # if partial_text:
+                        #     print(f"Partial: {partial_text}")
+
+                    except Exception as e:
+                        print(f"Error in speech recognition: {e}")
 
             # Start recording
             with sd.InputStream(
@@ -692,12 +716,12 @@ class MainWindow(QMainWindow):
                 samplerate=self.sample_rate,
                 blocksize=self.chunk_size,
                 callback=audio_callback,
-                dtype=np.float32
+                dtype=np.float32,
             ):
                 print(f"Started listening on device {device_id}")
                 while self.is_listening:
                     time.sleep(0.1)
-                    
+
         except Exception as e:
             print(f"Error in audio processing: {e}")
             self.is_listening = False
@@ -708,7 +732,7 @@ class MainWindow(QMainWindow):
         # Update status to show detection
         self.status_label.setText(self.tr("Wake word detected!"))
         self.status_label.setStyleSheet("color: blue; font-weight: bold;")
-        
+
         # Reset status after 2 seconds
         threading.Timer(2.0, self.reset_listening_status).start()
 
@@ -738,7 +762,7 @@ class MainWindow(QMainWindow):
         """Handle language selection change"""
         language_code = self.language_codes.get(language_text, "en")
         self.load_language(language_code)
-        
+
         # Save configuration after language change
         self.save_config()
 
@@ -791,21 +815,21 @@ class MainWindow(QMainWindow):
         self.model_label.setText(self.tr("Model:"))
         self.api_label.setText(self.tr("API URL:"))
         self.set_api_button.setText(self.tr("Set"))
-        
+
         # Update Listen button text based on current state
         if self.is_listening:
             self.listen_button.setText(self.tr("Stop"))
         else:
             self.listen_button.setText(self.tr("Listen"))
-        
+
         # Update API URL label if it's "Not set"
         if self.api_url.text() == "Not set":
             self.api_url.setText(self.tr("Not set"))
-            
+
         # Update status label if it's in default state
         if self.status_label.text() == "Ready":
             self.status_label.setText(self.tr("Ready"))
-            
+
         # Update model status
         self.check_and_update_model_status()
 
@@ -883,7 +907,7 @@ class MainWindow(QMainWindow):
 
             if microphones:
                 self.microphone_combo.addItems(microphones)
-                
+
                 # Restore previously selected microphone if available
                 selected_mic = self.config.get("audio", {}).get("selected_microphone")
                 if selected_mic:
@@ -929,11 +953,11 @@ class MainWindow(QMainWindow):
         try:
             # Save configuration before quitting
             self.save_config()
-            
+
             # Stop listening if active
             if self.is_listening:
                 self.stop_listening()
-            
+
             # Hide and clean up tray icon
             if hasattr(self, "tray_icon") and self.tray_icon:
                 self.tray_icon.hide()

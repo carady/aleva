@@ -80,6 +80,10 @@
         <translation>ウェイクワードモデルが利用できません</translation>
     </message>
     <message>
+        <source>Speech model not available</source>
+        <translation>音声モデルが利用できません</translation>
+    </message>
+    <message>
         <source>Wake word detected!</source>
         <translation>ウェイクワードを検出！</translation>
     </message>

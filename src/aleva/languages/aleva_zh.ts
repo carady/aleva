@@ -80,6 +80,10 @@
         <translation>唤醒词模型不可用</translation>
     </message>
     <message>
+        <source>Speech model not available</source>
+        <translation>语音模型不可用</translation>
+    </message>
+    <message>
         <source>Wake word detected!</source>
         <translation>检测到唤醒词！</translation>
     </message>

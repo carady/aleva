@@ -80,6 +80,10 @@
         <translation>Wake word model not available</translation>
     </message>
     <message>
+        <source>Speech model not available</source>
+        <translation>Speech model not available</translation>
+    </message>
+    <message>
         <source>Wake word detected!</source>
         <translation>Wake word detected!</translation>
     </message>
