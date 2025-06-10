@@ -83,6 +83,30 @@
         <source>Wake word detected!</source>
         <translation>Wake word detected!</translation>
     </message>
+    <message>
+        <source>Model:</source>
+        <translation>Model:</translation>
+    </message>
+    <message>
+        <source>Not loaded</source>
+        <translation>Not loaded</translation>
+    </message>
+    <message>
+        <source>Load</source>
+        <translation>Load</translation>
+    </message>
+    <message>
+        <source>Reload</source>
+        <translation>Reload</translation>
+    </message>
+    <message>
+        <source>Model Exists</source>
+        <translation>Model Exists</translation>
+    </message>
+    <message>
+        <source>Vosk model already exists. Do you want to redownload it?</source>
+        <translation>Vosk model already exists. Do you want to redownload it?</translation>
+    </message>
 </context>
 <context>
     <name>ApiUrlDialog</name>
@@ -101,6 +125,37 @@
     <message>
         <source>Cancel</source>
         <translation>Cancel</translation>
+    </message>
+</context>
+<context>
+    <name>ModelDownloadDialog</name>
+    <message>
+        <source>Download Model</source>
+        <translation>Download Model</translation>
+    </message>
+    <message>
+        <source>Downloading Vosk model...</source>
+        <translation>Downloading Vosk model...</translation>
+    </message>
+    <message>
+        <source>Extracting model...</source>
+        <translation>Extracting model...</translation>
+    </message>
+    <message>
+        <source>Model downloaded successfully!</source>
+        <translation>Model downloaded successfully!</translation>
+    </message>
+    <message>
+        <source>Success</source>
+        <translation>Success</translation>
+    </message>
+    <message>
+        <source>Vosk model downloaded and extracted successfully!</source>
+        <translation>Vosk model downloaded and extracted successfully!</translation>
+    </message>
+    <message>
+        <source>Download Error</source>
+        <translation>Download Error</translation>
     </message>
 </context>
 </TS> 

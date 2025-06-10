@@ -83,6 +83,30 @@
         <source>Wake word detected!</source>
         <translation>检测到唤醒词！</translation>
     </message>
+    <message>
+        <source>Model:</source>
+        <translation>模型:</translation>
+    </message>
+    <message>
+        <source>Not loaded</source>
+        <translation>未加载</translation>
+    </message>
+    <message>
+        <source>Load</source>
+        <translation>加载</translation>
+    </message>
+    <message>
+        <source>Reload</source>
+        <translation>重新加载</translation>
+    </message>
+    <message>
+        <source>Model Exists</source>
+        <translation>模型已存在</translation>
+    </message>
+    <message>
+        <source>Vosk model already exists. Do you want to redownload it?</source>
+        <translation>Vosk模型已存在。您要重新下载吗？</translation>
+    </message>
 </context>
 <context>
     <name>ApiUrlDialog</name>
@@ -101,6 +125,37 @@
     <message>
         <source>Cancel</source>
         <translation>取消</translation>
+    </message>
+</context>
+<context>
+    <name>ModelDownloadDialog</name>
+    <message>
+        <source>Download Model</source>
+        <translation>下载模型</translation>
+    </message>
+    <message>
+        <source>Downloading Vosk model...</source>
+        <translation>正在下载Vosk模型...</translation>
+    </message>
+    <message>
+        <source>Extracting model...</source>
+        <translation>正在解压模型...</translation>
+    </message>
+    <message>
+        <source>Model downloaded successfully!</source>
+        <translation>模型下载成功！</translation>
+    </message>
+    <message>
+        <source>Success</source>
+        <translation>成功</translation>
+    </message>
+    <message>
+        <source>Vosk model downloaded and extracted successfully!</source>
+        <translation>Vosk模型下载并解压成功！</translation>
+    </message>
+    <message>
+        <source>Download Error</source>
+        <translation>下载错误</translation>
     </message>
 </context>
 </TS> 

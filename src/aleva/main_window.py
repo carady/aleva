@@ -3,6 +3,8 @@ import os
 import sys
 import threading
 import time
+import urllib.request
+import zipfile
 from pathlib import Path
 from typing import Optional
 from platform import system
@@ -10,9 +12,10 @@ from platform import system
 import numpy as np
 import sounddevice as sd
 import onnxruntime as ort
+from vosk import Model as VoskModel, KaldiRecognizer
 import openwakeword
 from openwakeword.model import Model as WakeWordModel
-from PySide6.QtCore import Qt, QStandardPaths, QTranslator
+from PySide6.QtCore import Qt, QStandardPaths, QTranslator, QThread, Signal
 from PySide6.QtGui import QAction, QCloseEvent, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -25,6 +28,8 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QProgressBar,
+    QProgressDialog,
     QPushButton,
     QSystemTrayIcon,
     QVBoxLayout,
@@ -36,6 +41,105 @@ if system() == 'Windows':
     import win32con
 
 WAKE_WORD_FILE = 'alexa_v0.1.onnx'
+VOSK_MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-en-us-0.22.zip"
+VOSK_MODEL_NAME = "vosk-model-en-us-0.22"
+
+
+class DownloadThread(QThread):
+    """Thread for downloading files without blocking the UI"""
+    
+    progress_updated = Signal(int)
+    download_finished = Signal(str)
+    download_error = Signal(str)
+    
+    def __init__(self, url: str, target_path: Path, parent=None):
+        super().__init__(parent)
+        self.url = url
+        self.target_path = target_path
+        self.target_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    def run(self):
+        """Download file in background thread"""
+        try:
+            def progress_hook(block_num, block_size, total_size):
+                if total_size > 0:
+                    downloaded = block_num * block_size
+                    percentage = min(int(downloaded * 100 / total_size), 100)
+                    self.progress_updated.emit(percentage)
+            
+            urllib.request.urlretrieve(self.url, self.target_path, progress_hook)
+            self.download_finished.emit(str(self.target_path))
+            
+        except Exception as e:
+            self.download_error.emit(str(e))
+
+
+class ModelDownloadDialog(QProgressDialog):
+    """Dialog for downloading and extracting models"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(self.tr("Download Model"))
+        self.setLabelText(self.tr("Downloading Vosk model..."))
+        self.setRange(0, 100)
+        self.setModal(True)
+        self.setAutoClose(False)
+        self.setAutoReset(False)
+        
+        # Thread for downloading
+        self.download_thread = None
+        self.models_dir = None
+        self.target_file = None
+        
+    def start_download(self, models_dir: Path):
+        """Start the download process"""
+        self.models_dir = models_dir
+        self.target_file = models_dir / "vosk-model-en-us-0.22.zip"
+        
+        # Create download thread
+        self.download_thread = DownloadThread(VOSK_MODEL_URL, self.target_file, self)
+        self.download_thread.progress_updated.connect(self.setValue)
+        self.download_thread.download_finished.connect(self.on_download_finished)
+        self.download_thread.download_error.connect(self.on_download_error)
+        
+        # Start download
+        self.download_thread.start()
+        self.show()
+    
+    def on_download_finished(self, file_path: str):
+        """Handle successful download completion"""
+        self.setLabelText(self.tr("Extracting model..."))
+        self.setValue(100)
+        
+        try:
+            # Extract the zip file
+            with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                zip_ref.extractall(self.models_dir)
+            
+            # Clean up zip file
+            os.remove(file_path)
+            
+            self.setLabelText(self.tr("Model downloaded successfully!"))
+            QMessageBox.information(self, self.tr("Success"), 
+                                  self.tr("Vosk model downloaded and extracted successfully!"))
+            self.accept()
+            
+        except Exception as e:
+            self.on_download_error(f"Failed to extract: {e}")
+    
+    def on_download_error(self, error_message: str):
+        """Handle download error"""
+        self.hide()
+        QMessageBox.critical(self, self.tr("Download Error"), 
+                           self.tr(f"Failed to download model: {error_message}"))
+        self.reject()
+    
+    def closeEvent(self, event):
+        """Handle dialog close event"""
+        if self.download_thread and self.download_thread.isRunning():
+            self.download_thread.terminate()
+            self.download_thread.wait()
+        event.accept()
 
 
 class ApiUrlDialog(QDialog):
@@ -108,6 +212,8 @@ class MainWindow(QMainWindow):
         self.is_listening = False
         self.audio_thread: Optional[threading.Thread] = None
         self.oww_model: Optional[WakeWordModel] = None
+        self.vosk_model: Optional[VoskModel] = None
+        self.vosk_recognizer: Optional[KaldiRecognizer] = None
         self.sample_rate = 16000
         self.chunk_size = 1024
         
@@ -116,6 +222,12 @@ class MainWindow(QMainWindow):
 
         # Setup UI
         self.setup_ui()
+        
+        # Check model status
+        has_vosk_model = self.check_and_update_model_status()
+        if has_vosk_model:
+            self.vosk_model = VoskModel(str(self.config_dir / "models" / VOSK_MODEL_NAME))
+            self.vosk_recognizer = KaldiRecognizer(self.vosk_model, self.sample_rate)
 
         # Setup system tray
         self.setup_system_tray()
@@ -158,6 +270,19 @@ class MainWindow(QMainWindow):
         microphone_layout.addWidget(self.microphone_combo)
         microphone_layout.addWidget(self.refresh_button)
 
+        # Model section
+        model_layout = QHBoxLayout()
+        self.model_label = QLabel(self.tr("Model:"))
+        self.vosk_model_label = QLabel(self.tr("Not loaded"))
+        self.vosk_model_label.setStyleSheet("color: gray; font-style: italic;")
+        self.load_model_button = QPushButton(self.tr("Load"))
+        self.load_model_button.clicked.connect(self.show_model_download_dialog)
+
+        model_layout.addWidget(self.model_label)
+        model_layout.addWidget(self.vosk_model_label)
+        model_layout.addStretch()
+        model_layout.addWidget(self.load_model_button)
+
         # API URL section
         api_layout = QHBoxLayout()
         self.api_label = QLabel(self.tr("API URL:"))
@@ -185,6 +310,7 @@ class MainWindow(QMainWindow):
 
         layout.addLayout(language_layout)
         layout.addLayout(microphone_layout)
+        layout.addLayout(model_layout)
         layout.addLayout(api_layout)
         layout.addLayout(listen_layout)
         layout.addStretch()
@@ -244,6 +370,47 @@ class MainWindow(QMainWindow):
             
             # Save configuration after API URL change
             self.save_config()
+
+    def show_model_download_dialog(self) -> None:
+        """Show model download dialog"""
+        models_dir = self.config_dir / "models"
+        
+        # Check if model already exists
+        vosk_model_dir = models_dir / VOSK_MODEL_NAME
+        if vosk_model_dir.exists():
+            reply = QMessageBox.question(
+                self, 
+                self.tr("Model Exists"), 
+                self.tr("Vosk model already exists. Do you want to redownload it?"),
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+        
+        # Start download
+        dialog = ModelDownloadDialog(self)
+        dialog.start_download(models_dir)
+        
+        # Update model status after successful download
+        if dialog.exec() == QProgressDialog.Accepted:
+            self.check_and_update_model_status()
+
+    def check_and_update_model_status(self) -> bool:
+        """Check if Vosk model exists and update UI accordingly"""
+        models_dir = self.config_dir / "models"
+        vosk_model_dir = models_dir / VOSK_MODEL_NAME
+        
+        if vosk_model_dir.exists() and vosk_model_dir.is_dir():
+            self.vosk_model_label.setText(VOSK_MODEL_NAME)
+            self.vosk_model_label.setStyleSheet("color: green; font-weight: bold;")
+            self.load_model_button.setText(self.tr("Reload"))
+            return True
+
+        self.vosk_model_label.setText(self.tr("Not loaded"))
+        self.vosk_model_label.setStyleSheet("color: gray; font-style: italic;")
+        self.load_model_button.setText(self.tr("Load"))
+        return False
 
     def init_wake_word_model(self) -> None:
         """Initialize the OpenWakeWord model"""
@@ -311,6 +478,9 @@ class MainWindow(QMainWindow):
             },
             "api": {
                 "url": None
+            },
+            "models": {
+                "vosk_model_path": None
             },
             "system": {
                 "minimize_to_tray": True,
@@ -618,6 +788,7 @@ class MainWindow(QMainWindow):
         self.language_label.setText(self.tr("Language:"))
         self.microphone_label.setText(self.tr("Microphone:"))
         self.refresh_button.setText(self.tr("Refresh"))
+        self.model_label.setText(self.tr("Model:"))
         self.api_label.setText(self.tr("API URL:"))
         self.set_api_button.setText(self.tr("Set"))
         
@@ -634,6 +805,9 @@ class MainWindow(QMainWindow):
         # Update status label if it's in default state
         if self.status_label.text() == "Ready":
             self.status_label.setText(self.tr("Ready"))
+            
+        # Update model status
+        self.check_and_update_model_status()
 
         # Update tray menu
         if self.isVisible():

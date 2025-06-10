@@ -83,6 +83,30 @@
         <source>Wake word detected!</source>
         <translation>ウェイクワードを検出！</translation>
     </message>
+    <message>
+        <source>Model:</source>
+        <translation>モデル:</translation>
+    </message>
+    <message>
+        <source>Not loaded</source>
+        <translation>未ロード</translation>
+    </message>
+    <message>
+        <source>Load</source>
+        <translation>ロード</translation>
+    </message>
+    <message>
+        <source>Reload</source>
+        <translation>再ロード</translation>
+    </message>
+    <message>
+        <source>Model Exists</source>
+        <translation>モデルが存在</translation>
+    </message>
+    <message>
+        <source>Vosk model already exists. Do you want to redownload it?</source>
+        <translation>Voskモデルが既に存在します。再ダウンロードしますか？</translation>
+    </message>
 </context>
 <context>
     <name>ApiUrlDialog</name>
@@ -101,6 +125,37 @@
     <message>
         <source>Cancel</source>
         <translation>キャンセル</translation>
+    </message>
+</context>
+<context>
+    <name>ModelDownloadDialog</name>
+    <message>
+        <source>Download Model</source>
+        <translation>モデルをダウンロード</translation>
+    </message>
+    <message>
+        <source>Downloading Vosk model...</source>
+        <translation>Voskモデルをダウンロード中...</translation>
+    </message>
+    <message>
+        <source>Extracting model...</source>
+        <translation>モデルを解凍中...</translation>
+    </message>
+    <message>
+        <source>Model downloaded successfully!</source>
+        <translation>モデルのダウンロードが成功しました！</translation>
+    </message>
+    <message>
+        <source>Success</source>
+        <translation>成功</translation>
+    </message>
+    <message>
+        <source>Vosk model downloaded and extracted successfully!</source>
+        <translation>Voskモデルのダウンロードと解凍が成功しました！</translation>
+    </message>
+    <message>
+        <source>Download Error</source>
+        <translation>ダウンロードエラー</translation>
     </message>
 </context>
 </TS> 
